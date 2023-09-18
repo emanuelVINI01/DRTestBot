@@ -10,19 +10,18 @@ export default class UserRepository {
     createTable() {
         this.connection.query("CREATE TABLE IF NOT EXISTS user_data (id TEXT, message_count INT)")
     }
+
+
     /**
      * @param {number} id
- * @returns {{
-    *  id : String
-    *  messageCount : number
-    * } | null} data
     */
     select(id, callback) {
         const query = mysql.format("SELECT * FROM user_data WHERE id = ?", [
             id
         ])
         this.connection.query(query, (errors, results, fields) => {
-            if (results.size == 0) {
+            let nowResult = results[0]
+            if (nowResult == undefined) {
                 callback(
                     this.create({
                         id,
@@ -30,7 +29,7 @@ export default class UserRepository {
                     })
                 )
             }
-            let nowResult = results[0]
+            console.log(results)
             callback(
                 {
                     id,

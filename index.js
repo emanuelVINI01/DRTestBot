@@ -7,10 +7,13 @@ import * as config from "./config.json" assert { type: "json" }
 import * as mysql from 'mysql'
 import ApiCommand from "./command/commands/api_command.js"
 import AdminSetCommand from "./command/commands/admin_set_command.js"
+import StockCommand from "./command/commands/stock_command.js"
+import UserStats from "./command/commands/user_stats_command.js"
 
 const { token, database } = config.default
 
 const connection = mysql.createConnection(database)
+const intervalsScheduler = []
 
 /**
  * @type {ServerRepository}
@@ -23,10 +26,14 @@ const userRepository = new UserRepository(connection)
 userRepository.createTable()
 
 
+
+
 const commands = [
     new RPSCommand(),
     new ApiCommand(),
-    new AdminSetCommand(serverRepository)
+    new AdminSetCommand(serverRepository, intervalsScheduler),
+    new StockCommand(),
+    new UserStats(userRepository)
 ]
 
 const commandsData = []
@@ -38,8 +45,9 @@ commands.forEach(command => {
 })
 
 
+
 const bot = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers,  GatewayIntentBits.GuildMessages]
 })
 
 bot.on("ready", async () => {
@@ -50,6 +58,20 @@ bot.on("ready", async () => {
         body: commandsData
     }
     )
+    serverRepository.all(servers => {
+        servers.forEach(server => {
+            if (server.joinChannel != '0' && server.joinMessage != '' && server.timeMessage != -1) {
+                try {
+                    setInterval(() => {
+                        bot.guilds.cache.get(server.id).channels.cache.get(server.joinChannel).send(
+                            server.joinMessage.replace("@user", "Scheduler")
+                        )
+                    }, server.timeMessage * 1000 * 60)
+                } catch (_) {
+                }
+            }
+        })
+    })
 })
 
 bot.on("messageCreate", async event => {
@@ -73,7 +95,7 @@ bot.on("guildMemberAdd", async event => {
     })
 
 })
-
+''
 bot.on("interactionCreate", async event => {
     if (event.isCommand()) {
         commands.filter(command => command.name == event.commandName).forEach(command => {
@@ -84,31 +106,6 @@ bot.on("interactionCreate", async event => {
 
 bot.login(token)
 
-const sendorAll = () => {
-    bot.guilds.cache.forEach(guild => {
-        serverRepository.select(guild.id, serverData => {
-            if (serverData.joinChannel != "0" && serverData.joinMessage != "") {
-                const channel = guild.channels.cache.get(serverData.joinChannel)
-                if (channel != null) {
-                    channel.send(
-                        serverData.joinMessage.replace("@user", `Repeating Scheduler`)
-                    )
-                }
-            }
-        })
-    })
-}
 
-
-let rule = new RecurrenceRule();
-
-rule.second = 0;
-rule.minute = 4;
-rule.hour = 0;
-
-
-scheduleJob(rule, function () {
-    sendForAll()
-});
 
 console.log("Bot working!")
